@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MoSi — PSO + Boids Emergency Evacuation Simulator</title>
+<style id="theme"></style>
+</head>
+<body>
+<div id="topbar"></div>
+<div class="workspace">
+  <div class="sidepanel" id="sidePanel"></div>
+  <div class="canvasarea"><canvas id="canvas" width="1300" height="820"></canvas></div>
+</div>
+<div class="statusbar"><span id="status">Ready</span><span style="flex:1"></span><span id="toolLabel">Tool: Select</span></div>
+<script id="appjs">
+const CSS=`
+:root{--bg:#f5f7fa;--panel:#ffffff;--panel-border:#e2e8f0;--toolbar:#1e293b;--toolbar-text:#f8fafc;--accent:#3b82f6;--danger:#ef4444;--success:#10b981;--muted:#64748b;--canvas-bg:#ffffff;--wall:#64748b;--exit:#10b981;--safe:#3b82f6;--particle:#22c55e;--particle-evac:#86efac;--select:#3b82f6;--handle:#fde047;--handle-border:#b45309;}
+*{box-sizing:border-box}
+body{margin:0;font-family:"Segoe UI",system-ui,-apple-system,Roboto,sans-serif;background:var(--bg);color:#0f172a;overflow:hidden;height:100vh;display:flex;flex-direction:column}
+.topbar{background:var(--toolbar);color:var(--toolbar-text);height:52px;display:flex;align-items:center;gap:8px;padding:0 16px;flex-shrink:0;z-index:50;box-shadow:0 2px 10px rgba(15,23,42,0.12)}
+.modegroup{display:flex;gap:5px;border:1px solid rgba(255,255,255,0.12);border-radius:8px;padding:4px}
+.modebtn{background:transparent;border:1px solid transparent;color:var(--toolbar-text);padding:5px 14px;border-radius:6px;font-size:13px;cursor:pointer}
+.modebtn.active{background:var(--accent);border-color:var(--accent);color:#fff}
+.modebtn:hover:not(.active){background:rgba(255,255,255,0.08)}
+.topbar span.div{color:rgba(255,255,255,0.3);font-size:11px}
+.toolgroup{display:flex;gap:5px}
+.toolbtn{background:transparent;border:1px solid transparent;color:var(--toolbar-text);height:36px;padding:0 9px;border-radius:7px;font-size:14px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:5px;transition:background .12s}
+.toolbtn span{font-size:11.5px;font-weight:600}
+.toolbtn.sq{width:38px;padding:0}
+.toolbtn:active{transform:translateY(1px)}
+.playbtn{background:var(--success);color:#fff;border:none;height:36px;padding:0 14px;border-radius:7px;font-size:13px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px;transition:background .12s}
+.playbtn:hover{background:#0d9f78}
+.playbtn:active{transform:translateY(1px)}
+.statsbar{display:flex;gap:16px;margin-right:4px}
+.stat{display:flex;flex-direction:column;align-items:center;font-size:9.5px;text-transform:uppercase;letter-spacing:.6px;color:#94a3b8;line-height:1.15}
+.stat b{font-size:15px;color:#f8fafc;font-weight:700;font-variant-numeric:tabular-nums}
+.toolbtn.active{background:var(--accent);box-shadow:0 0 0 2px var(--accent);color:#fff}
+.toolbtn:hover:not(.active){background:rgba(255,255,255,0.08)}
+.topbar .spacer{flex:1}
+.workspace{display:flex;flex:1;overflow:hidden}
+.sidepanel{width:340px;background:var(--panel);border-left:1px solid var(--panel-border);box-shadow:0 4px 20px rgba(15,23,42,0.06);display:flex;flex-direction:column;flex-shrink:0;overflow-y:auto}
+.canvasarea{flex:1;position:relative;background:var(--canvas-bg);overflow:auto;display:flex;align-items:center;justify-content:center}
+canvas{cursor:crosshair;display:block;background:var(--canvas-bg);box-shadow:inset 0 0 0 1px #eef2f7}
+.section{padding:11px 14px;border-bottom:1px solid var(--panel-border)}
+.section:last-child{border-bottom:none}
+.section h3{margin:0 0 9px 0;font-size:12px;text-transform:uppercase;letter-spacing:.7px;color:var(--muted);font-weight:600}
+.row{display:flex;gap:8px;align-items:center;margin-bottom:8px}
+.row label{font-size:12px;flex-shrink:0;color:#334155;width:84px}
+input[type=number]{width:66px;padding:4px 7px;font-size:12px;border:1px solid var(--panel-border);border-radius:5px;background:#fff;color:#0f172a}
+input:focus,select:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 2px rgba(59,130,246,.18)}
+button{width:100%;padding:6px 10px;font-size:12.5px;border:1px solid var(--panel-border);border-radius:6px;background:#fff;cursor:pointer;color:#0f172a}
+button:hover{background:#f8fafc;border-color:#cbd5e1}
+button.primary{background:var(--success);color:#fff;border-color:var(--success)}
+button.primary:hover{background:#0d9f78}
+button.danger{background:var(--danger);color:#fff;border-color:var(--danger)}
+button.danger:hover{background:#dc2626}
+button.secondary{background:var(--accent);color:#fff;border-color:var(--accent)}
+button.secondary:hover{background:#2563eb}
+button:disabled{opacity:.55;cursor:default}
+.checkbox-row{display:flex;align-items:center;gap:8px;font-size:12px;color:#334155;margin-bottom:6px}
+.checkbox-row input{accent-color:var(--accent);width:15px;height:15px}
+.selectbox{width:100%;padding:4px 7px;font-size:12px;border:1px solid var(--panel-border);border-radius:5px;background:#fff;color:#0f172a}
+.small{font-size:11px;color:var(--muted)}
+.hint{font-size:12px;color:var(--muted);line-height:1.5;margin-top:6px}
+.statusbar{height:26px;background:#e2e8f0;color:#334155;font-size:12px;padding:0 14px;display:flex;align-items:center;flex-shrink:0;border-top:1px solid var(--panel-border)}
+.keynote{font-size:11px;color:var(--muted);font-style:italic;margin-top:6px;line-height:1.4}
+.togglebox{border:1px solid var(--panel-border);border-radius:8px;padding:8px 10px;margin-bottom:8px;background:#f8fafc}
+.togglebox h4{margin:0 0 7px 0;font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
+`;
+document.getElementById('theme').textContent=CSS;
+const TOPBAR=`<div class="topbar"><div class="modegroup"><button class="modebtn active" id="modeEdit" onclick="app.setMode('edit')">&#9998; Edit Map</button><button class="modebtn" id="modeSim" onclick="app.setMode('sim')">&#9654; Simulate</button></div><span class="div">|</span><div class="toolgroup"><button class="toolbtn active" id="toolSelect" title="Select / move / resize (1)" onclick="app.setTool('select')">&#128433;<span>Select</span></button><button class="toolbtn" id="toolWall" title="Draw wall — drag a line, hold Shift to snap axis (2)" onclick="app.setTool('wall')">&#128208;<span>Wall</span></button><button class="toolbtn" id="toolExit" title="Place exit — drag a zone (3)" onclick="app.setTool('exit')">&#128682;<span>Exit</span></button><button class="toolbtn" id="toolSafe" title="Place safe zone — drag a zone (4)" onclick="app.setTool('safe')">&#128737;<span>Safe</span></button><button class="toolbtn" id="toolParticle" title="Place particle — click canvas (5)" onclick="app.setTool('particle')">&#128330;<span>Particle</span></button><button class="toolbtn" id="toolTarget" title="Assign target — click a particle, then an exit/safe (6)" onclick="app.setTool('target')">&#127919;<span>Target</span></button><button class="toolbtn" id="toolDelete" title="Delete object (7)" onclick="app.setTool('delete')">&#128465;<span>Delete</span></button></div><span class="div">|</span><button class="playbtn" id="btnRun" title="Run / Pause (Space)" onclick="app.toggleRun()">&#9658; Run</button><button class="toolbtn sq" id="btnStep" title="Step 1 iter" onclick="app.stepSim()">&#9197;</button><button class="toolbtn sq" id="btnReset" title="Reset sim" onclick="app.resetSim()">&#8634;</button><div class="spacer"></div><div class="statsbar"><span class="stat"><b id="statParticles">0</b>particles</span><span class="stat"><b id="statIter">0</b>iters</span><span class="stat"><b id="statEvac">0</b>evacuated</span></div><span id="statusText" class="hint" style="color:#cbd5e1;">Ready</span></div>`;
+document.getElementById('topbar').innerHTML=TOPBAR;
+
+const SIDEPANEL=`<div class="section"><h3>PSO</h3><div class="row"><label>Inertia w</label><input type="number" id="psoW" step="0.1" value="0.7"></div><div class="row"><label>Cognitive c1</label><input type="number" id="psoC1" step="0.1" value="1.4"></div><div class="row"><label>Social c2</label><input type="number" id="psoC2" step="0.1" value="1.4"></div><div class="row"><label>Max velocity</label><input type="number" id="psoMaxV" step="0.5" value="10"></div><div class="row"><label>Iters / frame</label><input type="number" id="psoIters" step="1" value="2"></div><button class="primary" onclick="app.applyPso()">Apply PSO params</button></div><div class="togglebox"><h4>Boids flocking</h4><div class="checkbox-row"><input type="checkbox" id="boidsOn" checked onchange="app.applyBoids()"><label>Enable boids</label></div><div class="row"><label>Separation</label><input type="number" id="boidSep" step="0.1" value="1.6"></div><div class="row"><label>Alignment</label><input type="number" id="boidAli" step="0.1" value="0.6"></div><div class="row"><label>Cohesion</label><input type="number" id="boidCoh" step="0.1" value="0.8"></div><div class="row"><label>Neighbor radius</label><input type="number" id="boidRadius" step="10" value="70"></div><div class="checkbox-row"><input type="checkbox" id="wallAvoid" checked onchange="app.applyBoids()"><label>Avoid walls</label></div><div class="row"><label>Wall repel</label><input type="number" id="wallRepel" step="0.1" value="2.2"></div></div><div class="section"><h3>Add particles</h3><div class="row"><label>Count</label><input type="number" id="addCount" step="1" value="14"></div><button onclick="app.addParticles()">Add random particles</button></div><div class="section"><h3>Selected object</h3><div id="selKind" class="small" style="font-weight:600;">&mdash;</div><div class="row"><label>Kind</label><select class="selectbox" id="selType" onchange="app.changeSelType()"><option value="wall">Wall line</option><option value="exit">Exit zone</option><option value="safe">Safe zone</option><option value="particle">Particle</option></select></div><div class="row"><label>Target kind</label><select class="selectbox" id="selTargetKind" onchange="app.applySelTarget()"><option value="nearest">Nearest exit/safe</option><option value="exit">Specific exit</option><option value="safe">Specific safe zone</option></select></div><div class="row"><label>Target</label><select class="selectbox" id="selTargetObj"></select></div><div class="row"><label>X</label><input type="number" id="selX" step="1" onchange="app.applySelTransform()"></div><div class="row"><label>Y</label><input type="number" id="selY" step="1" onchange="app.applySelTransform()"></div><div class="row"><label>W</label><input type="number" id="selW" step="1" onchange="app.applySelSize()"></div><div class="row"><label>H</label><input type="number" id="selH" step="1" onchange="app.applySelSize()"></div><button class="danger" style="margin-top:6px;" onclick="app.deleteSelected()">Delete selected</button></div><div class="section"><h3>Map</h3><button onclick="app.saveMap()">Save map (JSON)</button><button onclick="app.loadMap()">Load map (JSON)</button><button class="secondary" onclick="app.clearMap()">Clear map</button><button class="secondary" onclick="app.demoLayout()">Demo layout</button></div><div class="keynote">Tips: <b>Wall</b> tool — click-drag to draw a wall line, hold <b>Shift</b> to snap horizontal/vertical. Drag objects to move; drag yellow handles (or wall endpoints) to reshape. Select a particle then pick its target exit/safe zone below — particles do <b>not</b> all use the same exit. Tools: keys <b>1–7</b>. Overlays: <b>V</b> velocity, <b>P</b> pbest, <b>G</b> gbest, <b>B</b> boids (neighbor links + steering). Press <b>Del</b> to delete.</div>`;
+document.getElementById('sidePanel').innerHTML=SIDEPANEL;
+
+const CANVAS_W=1300,CANVAS_H=820,MIN_RECT=16,HANDLE=7,RADIUS=7;
+const state={mode:'edit',tool:'select',walls:[],exits:[],safes:[],particles:[],selected:null,drag:null,running:false,animId:null,iter:0,pso:{w:0.7,c1:1.4,c2:1.4,maxV:10,iters:2},boids:{on:true,sep:1.6,ali:0.6,coh:0.8,radius:70},wallAvoid:true,wallRepel:2.2,showVel:true,showPbest:true,showGbest:true,showBoids:true};
+function rand(a,b){return Math.random()*(b-a)+a;}
+function clamp(v,lo,hi){return Math.max(lo,Math.min(hi,v));}
+function dist(a,b){return Math.hypot(a.x-b.x,a.y-b.y);}
+function rectContains(r,p){return p.x>=r.x&&p.x<=r.x+r.w&&p.y>=r.y&&p.y<=r.y+r.h;}
+function rectDist(r,p){const cx=Math.max(r.x,Math.min(p.x,r.x+r.w)),cy=Math.max(r.y,Math.min(p.y,r.y+r.h));return Math.hypot(p.x-cx,p.y-cy);}
+function centerOf(r){return{x:r.x+r.w/2,y:r.y+r.h/2};}
+function segDistToPoint(ax,ay,bx,by,px,py){const L2=(bx-ax)**2+(by-ay)**2;if(L2===0)return Math.hypot(px-ax,py-ay);let t=((px-ax)*(bx-ax)+(py-ay)*(by-ay))/L2;t=clamp(t,0,1);return Math.hypot(px-(ax+t*(bx-ax)),py-(ay+t*(by-ay)));}
+function pushOutOfWalls(pos,walls,radius,iters=3){for(let k=0;k<iters;k++){let moved=false;for(const w of walls){if(w.w&&w.h){const r={x:w.x-radius,y:w.y-radius,w:w.w+2*radius,h:w.h+2*radius};if(rectContains(r,pos)){const cx=r.x+r.w/2,cy=r.y+r.h/2;const ox=Math.min(pos.x-r.x,r.x+r.w-pos.x),oy=Math.min(pos.y-r.y,r.y+r.h-pos.y);if(ox<=oy)pos.x=pos.x<cx?r.x-0.01:r.x+r.w+0.01;else pos.y=pos.y<cy?r.y-0.01:r.y+r.h+0.01;moved=true;}}else{const d=segDistToPoint(w.x1,w.y1,w.x2,w.y2,pos.x,pos.y);if(d<radius){const nx=w.x2-w.x1,ny=w.y2-w.y1,L=Math.hypot(nx,ny);const dx=-ny/L,dy=nx/L;const side=dx*(pos.x-w.x1)+dy*(pos.y-w.y1);const sign=side>=0?1:-1;pos.x+=sign*dx*(radius-d+0.5);pos.y+=sign*dy*(radius-d+0.5);moved=true;}}}if(!moved)break;}return pos;}
+
+class Particle{
+  constructor(x,y){this.pos={x,y};const a=Math.random()*Math.PI*2,s=rand(2,7);this.vel={x:Math.cos(a)*s,y:Math.sin(a)*s};this.pbest={x,y};this.pbestCost=Infinity;this.radius=RADIUS;this.targetKind='nearest';this.targetObj=null;this.evacuated=false;}
+  targetRect(){if(this.targetObj)return this.targetObj;const exits=state.exits,safes=state.safes;if(exits.length===0&&safes.length===0)return null;let best=null,bd=Infinity;
+    for(const e of exits){const d=dist(this.pos,centerOf(e));if(d<bd){bd=d;best=e;}}
+    for(const s of safes){const d=dist(this.pos,centerOf(s));if(d<bd){bd=d;best=s;}}
+    return best;}
+  targetPos(){const t=this.targetRect();return t?centerOf(t):this.pos;}
+  groupKey(){const t=this.targetRect();if(!t)return['none',0];if(state.exits.includes(t))return['exit',state.exits.indexOf(t)];if(state.safes.includes(t))return['safe',state.safes.indexOf(t)];return['none',0];}
+  cost(){const t=this.targetPos();let c=dist(this.pos,t);for(const w of state.walls){const d=(w.w&&w.h)?rectDist(w,this.pos):segDistToPoint(w.x1,w.y1,w.x2,w.y2,this.pos.x,this.pos.y);if(d<this.radius)c+=1000+(this.radius-d)*50;}return c;}
+}
+function groupBests(){const groups={};for(const p of state.particles){if(p.evacuated)continue;const k=p.groupKey();(groups[k]||(groups[k]=[])).push(p);}const out={};for(const k in groups){const plist=groups[k],best=plist.reduce((a,b)=>a.pbestCost<b.pbestCost?a:b);out[k]=best.pbest;}return out;}
+function boidsForce(p){
+  if(!state.boids.on)return{x:0,y:0};let sep={x:0,y:0},ali={x:0,y:0},coh={x:0,y:0};let n=0;
+  for(const q of state.particles){if(q===p||q.evacuated)continue;const d=dist(p.pos,q.pos);if(d>0&&d<state.boids.radius){n++;sep.x+=(p.pos.x-q.pos.x)/d;sep.y+=(p.pos.y-q.pos.y)/d;ali.x+=q.vel.x;ali.y+=q.vel.y;coh.x+=q.pos.x;coh.y+=q.pos.y;}}
+  if(n===0)return{x:0,y:0};sep.x/=n;sep.y/=n;ali.x/=n;ali.y/=n;coh.x/=n;coh.y/=n;
+  const sepL=Math.hypot(sep.x,sep.y);if(sepL>0){sep.x=sep.x/sepL*state.boids.radius/60;sep.y=sep.y/sepL*state.boids.radius/60;}
+  const aliDesired={x:ali.x-p.vel.x,y:ali.y-p.vel.y};const aliL=Math.hypot(aliDesired.x,aliDesired.y);if(aliL>0){aliDesired.x=aliDesired.x/aliL*state.pso.maxV/3;aliDesired.y=aliDesired.y/aliL*state.pso.maxV/3;}
+  const cohDesired={x:coh.x-p.pos.x,y:coh.y-p.pos.y};const cohL=Math.hypot(cohDesired.x,cohDesired.y);if(cohL>0){cohDesired.x=cohDesired.x/cohL*state.boids.radius/60;cohDesired.y=cohDesired.y/cohL*state.boids.radius/60;}
+  if(state.showBoids)boidsVis.push({pos:{x:p.pos.x,y:p.pos.y},links:boidsNeighbors(p),steer:{x:sep.x*state.boids.sep+aliDesired.x*state.boids.ali+cohDesired.x*state.boids.coh,y:sep.y*state.boids.sep+aliDesired.y*state.boids.ali+cohDesired.y*state.boids.coh}});
+  return{x:sep.x*state.boids.sep+aliDesired.x*state.boids.ali+cohDesired.x*state.boids.coh,y:sep.y*state.boids.sep+aliDesired.y*state.boids.ali+cohDesired.y*state.boids.coh};
+}
+let boidsVis=[];
+function boidsNeighbors(p){const out=[];for(const q of state.particles){if(q===p||q.evacuated)continue;if(dist(p.pos,q.pos)<state.boids.radius)out.push(q.pos);}return out;}
+function wallAvoidForce(p){if(!state.wallAvoid)return{x:0,y:0};let ax=0,ay=0;
+  for(const w of state.walls){let d,dx=0,dy=0;
+    if(w.w&&w.h){d=rectDist(w,p.pos);const cx=Math.max(w.x,Math.min(p.pos.x,w.x+w.w)),cy=Math.max(w.y,Math.min(p.pos.y,w.y+w.h));dx=p.pos.x-cx;dy=p.pos.y-cy;}
+    else{d=segDistToPoint(w.x1,w.y1,w.x2,w.y2,p.pos.x,p.pos.y);const nx=w.x2-w.x1,ny=w.y2-w.y1,L=Math.hypot(nx,ny);const px=-ny/L,py=nx/L;const side=px*(p.pos.x-w.x1)+py*(p.pos.y-w.y1);const sign=side>=0?1:-1;dx=sign*px;dy=sign*py;}
+    if(d>0&&d<RADIUS*5){const f=(RADIUS*5-d)/(RADIUS*5);ax+=dx*f*state.wallRepel;ay+=dy*f*state.wallRepel;}}
+  return{x:ax,y:ay};
+}
+function psoStep(iters){
+  boidsVis=[];
+  for(const p of state.particles){if(!p.evacuated&&p.targetKind==='nearest'&&!p.targetObj)p.targetObj=p.targetRect();}
+  const gb=groupBests();
+  for(let it=0;it<iters;it++){
+    for(const p of state.particles){if(p.evacuated)continue;
+      const g=gb[p.groupKey()]||p.pos;const r1=Math.random(),r2=Math.random();
+      p.vel.x=p.vel.x*state.pso.w+(p.pbest.x-p.pos.x)*state.pso.c1*r1+(g.x-p.pos.x)*state.pso.c2*r2;
+      p.vel.y=p.vel.y*state.pso.w+(p.pbest.y-p.pos.y)*state.pso.c1*r1+(g.y-p.pos.y)*state.pso.c2*r2;
+      const bf=boidsForce(p);p.vel.x+=bf.x;p.vel.y+=bf.y;
+      const wf=wallAvoidForce(p);p.vel.x+=wf.x;p.vel.y+=wf.y;
+      // stuck recovery: if nearly stationary but not yet evacuated, nudge toward target.
+      // add tangential jitter so particles blocked by a wall slide around it, not into it.
+      if(Math.hypot(p.vel.x,p.vel.y)<1.5){const tp=p.targetPos(),tdx=tp.x-p.pos.x,tdy=tp.y-p.pos.y,td=Math.hypot(tdx,tdy);
+        if(td>0.5){const s=p._stuckJit||(p._stuckJit=(Math.random()<0.5?-1:1));p.vel.x+=tdx/td*2.5+(-tdy/td)*3*s;p.vel.y+=tdy/td*2.5+(tdx/td)*3*s;}}
+      const L=Math.hypot(p.vel.x,p.vel.y);if(L>state.pso.maxV){p.vel.x*=state.pso.maxV/L;p.vel.y*=state.pso.maxV/L;}
+      let nx=p.pos.x+p.vel.x,ny=p.pos.y+p.vel.y;pushOutOfWalls({x:nx,y:ny},state.walls,p.radius);
+      nx=clamp(nx,p.radius,CANVAS_W-p.radius);ny=clamp(ny,p.radius,CANVAS_H-p.radius);
+      p.pos={x:nx,y:ny};const c=p.cost();if(c<p.pbestCost){p.pbestCost=c;p.pbest={x:nx,y:ny};}
+      const tr=p.targetRect();if(tr&&rectDist(tr,p.pos)<=p.radius)p.evacuated=true;}
+    state.iter++;}
+}
+
+function objectAt(px,py){const p={x:px,y:py};
+  for(let i=state.particles.length-1;i>=0;i--){if(dist(state.particles[i].pos,p)<=state.particles[i].radius+5)return state.particles[i];}
+  for(const arr of [state.safes,state.exits,state.walls])for(let i=arr.length-1;i>=0;i--){
+    const o=arr[i];if(o.w&&o.h){if(rectContains(o,p))return o;}else{if(segDistToPoint(o.x1,o.y1,o.x2,o.y2,px,py)<=8)return o;}}
+  return null;}
+function handleAt(o,px,py,tol=8){
+  if(!o)return null;
+  if(o.w&&o.h){const corners={nw:[o.x,o.y],ne:[o.x+o.w,o.y],sw:[o.x,o.y+o.h],se:[o.x+o.w,o.y+o.h]};
+    for(const k in corners){const c=corners[k];if(Math.hypot(px-c[0],py-c[1])<=tol)return k;}
+    if(Math.abs(px-o.x)<=tol&&py>=o.y-tol&&py<=o.y+o.h+tol)return'w';if(Math.abs(px-(o.x+o.w))<=tol&&py>=o.y-tol&&py<=o.y+o.h+tol)return'e';
+    if(Math.abs(py-o.y)<=tol&&px>=o.x-tol&&px<=o.x+o.w+tol)return'n';if(Math.abs(py-(o.y+o.h))<=tol&&px>=o.x-tol&&px<=o.x+o.w+tol)return's';
+    return null;}
+  // segment wall: grab either endpoint
+  if(Math.hypot(px-o.x1,py-o.y1)<=tol)return'p1';if(Math.hypot(px-o.x2,py-o.y2)<=tol)return'p2';
+  return null;}
+function updateSelectionPanel(){
+  const o=state.selected;document.getElementById('selKind').textContent=o?o.constructor.name.toUpperCase():'&mdash;';
+  const tk=document.getElementById('selTargetKind'),to=document.getElementById('selTargetObj');
+  const sx=document.getElementById('selX'),sy=document.getElementById('selY'),sw=document.getElementById('selW'),sh=document.getElementById('selH');
+  const disabled=!(o&&(o.w!==undefined||o.radius!==undefined));
+  [tk,to,sx,sy,sw,sh].forEach(el=>el.disabled=disabled);
+  if(!o){tk.value='nearest';to.innerHTML='';return;}
+  if(o instanceof Particle){tk.value=o.targetKind;tk.disabled=false;}else{tk.value='nearest';tk.disabled=true;}
+  to.innerHTML='';const opts=[];
+  for(const e of state.exits)opts.push(['exit',e]);for(const s of state.safes)opts.push(['safe',s]);
+  for(let i=0;i<opts.length;i++){const [kind,obj]=opts[i];const op=document.createElement('option');op.value=kind+'|'+i;op.textContent=(kind==='exit'?'EXIT ':'SAFE ')+'#'+(i+1);to.appendChild(op);}
+  if(o instanceof Particle&&o.targetObj){const tgtKind=state.exits.includes(o.targetObj)?'exit':'safe';const idx=opts.findIndex(k=>{const [kk,obj2]=k;return obj2===o.targetObj&&kk===tgtKind;});if(idx>=0)to.value=idx;}
+  sx.value=o.x!==undefined?Math.round(o.x):'';sy.value=o.y!==undefined?Math.round(o.y):'';sw.value=o.w!==undefined?Math.round(o.w):'';sh.value=o.h!==undefined?Math.round(o.h):'';}
+
+function changeSelType(){
+  const o=state.selected;if(!o)return;const t=document.getElementById('selType').value;const isRect=o=>o.w!==undefined;
+  const removeFrom=(arr)=>{const i=arr.indexOf(o);if(i>=0)arr.splice(i,1);};
+  const addRect=(x,y,w=60,h=40,kind)=>{const r={x,y,w,h,center:function(){return{x:this.x+this.w/2,y:this.y+this.h/2};}};
+    if(kind==='wall')state.walls.push(r);else if(kind==='exit')state.exits.push(r);else state.safes.push(r);return r;};
+  if(isRect(o)&&t==='particle'){removeFrom(state.walls);removeFrom(state.exits);removeFrom(state.safes);
+    const p=new Particle(o.x+o.w/2,o.y+o.h/2);state.particles.push(p);state.selected=p;}
+  else if(o instanceof Particle&&(t==='wall'||t==='exit'||t==='safe')){removeFrom(state.particles);addRect(o.pos.x,o.pos.y,60,40,t);state.selected=null;}
+  else if(isRect(o)&&(t==='wall'||t==='exit'||t==='safe')){removeFrom(state.walls);removeFrom(state.exits);removeFrom(state.safes);addRect(o.x,o.y,o.w,o.h,t);state.selected=null;}
+  updateSelectionPanel();redraw();}
+function applySelTarget(){
+  const o=state.selected;if(!(o instanceof Particle))return;o.targetKind=document.getElementById('selTargetKind').value;
+  const sel=document.getElementById('selTargetObj');if(!sel.value){o.targetObj=null;return;}
+  const [kind,idx]=sel.value.split('|');o.targetObj=kind==='exit'?state.exits[idx]:state.safes[idx];}
+function applySelTransform(){
+  const o=state.selected;if(!o)return;const X=+document.getElementById('selX').value||0,Y=+document.getElementById('selY').value||0;
+  if(o instanceof Particle){o.pos.x=X;o.pos.y=Y;o.pbest={x:X,y:Y};}
+  else if(o.x1!==undefined){const ddx=X-o.x1,ddy=Y-o.y1;o.x1=X;o.y1=Y;o.x2+=ddx;o.y2+=ddy;}
+  else{o.x=X;o.y=Y;}redraw();}
+function applySelSize(){
+  const o=state.selected;if(!o||o.w===undefined)return;o.w=Math.max(MIN_RECT,+document.getElementById('selW').value||MIN_RECT);o.h=Math.max(MIN_RECT,+document.getElementById('selH').value||MIN_RECT);redraw();}
+function deleteSelected(){
+  const o=state.selected;if(!o)return;[state.walls,state.exits,state.safes,state.particles].forEach(arr=>{const i=arr.indexOf(o);if(i>=0)arr.splice(i,1);});
+  if(state.selected===o)state.selected=null;updateSelectionPanel();document.getElementById('statParticles').textContent=state.particles.length;redraw();}
+function setStatus(m){document.getElementById('status').textContent=m;document.getElementById('statusText').textContent=m;}
+function refreshTools(){
+  for(const id of ['toolSelect','toolWall','toolExit','toolSafe','toolParticle','toolDelete','toolTarget']){document.getElementById(id).classList.toggle('active',id==='tool'+state.tool[0].toUpperCase()+state.tool.slice(1));}
+  document.getElementById('toolLabel').textContent='Tool: '+state.tool;}
+function setMode(m){
+  state.mode=m;document.getElementById('modeEdit').classList.toggle('active',m==='edit');document.getElementById('modeSim').classList.toggle('active',m==='sim');
+  if(m==='sim'){if(!state.particles.length)setStatus('No particles yet. Add particles in Edit mode.');else setStatus('Sim mode — press Run.');}else setStatus('Edit mode.');
+  refreshTools();redraw();}
+function setTool(t){state.tool=t;state.selected=null;state.drag=null;updateSelectionPanel();refreshTools();
+  const cursors={select:'default',wall:'crosshair',exit:'crosshair',safe:'crosshair',particle:'copy',delete:'not-allowed',target:'pointer'};
+  document.getElementById('canvas').style.cursor=cursors[t]||'crosshair';redraw();}
+function addParticles(){
+  const n=Math.max(1,parseInt(document.getElementById('addCount').value||'10',10));let placed=0,tries=0;
+  while(placed<n&&tries<n*50){tries++;const p=new Particle(rand(40,CANVAS_W-40),rand(40,CANVAS_H-40));
+    if(state.walls.every(w=>{const d=(w.w&&w.h)?rectDist(w,p.pos):segDistToPoint(w.x1,w.y1,w.x2,w.y2,p.pos.x,p.pos.y);return d>=p.radius+2;})){state.particles.push(p);placed++;}
+  }
+  document.getElementById('statParticles').textContent=state.particles.length;setStatus(`Added ${placed} particle(s).`);redraw();}
+function applyPso(){
+  state.pso.w=+document.getElementById('psoW').value||0.7;state.pso.c1=+document.getElementById('psoC1').value||1.4;state.pso.c2=+document.getElementById('psoC2').value||1.4;
+  state.pso.maxV=+document.getElementById('psoMaxV').value||10;state.pso.iters=Math.max(1,parseInt(document.getElementById('psoIters').value||'2',10));setStatus('PSO params applied.');}
+function applyBoids(){
+  state.boids.on=document.getElementById('boidsOn').checked;state.boids.sep=+document.getElementById('boidSep').value||1.6;
+  state.boids.ali=+document.getElementById('boidAli').value||0.6;state.boids.coh=+document.getElementById('boidCoh').value||0.8;
+  state.boids.radius=+document.getElementById('boidRadius').value||70;state.wallAvoid=document.getElementById('wallAvoid').checked;
+  state.wallRepel=+document.getElementById('wallRepel').value||2.2;setStatus('Boids params applied.');}
+
+function saveMap(){
+  const data={walls:state.walls,exits:state.exits,safes:state.safes,particles:state.particles.map(p=>({x:p.pos.x,y:p.pos.y,targetKind:p.targetKind}))};
+  const blob=new Blob([JSON.stringify(data,null,1)],{type:'application/json'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='mosi_map.json';a.click();URL.revokeObjectURL(url);setStatus('Map saved.');}
+function loadMap(){
+  const input=document.createElement('input');input.type='file';input.accept='.json';input.onchange=e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=ev=>{
+    try{const d=JSON.parse(ev.target.result);state.walls=d.walls||[];state.exits=d.exits||[];state.safes=d.safes||[];state.particles=[];
+      (d.particles||[]).forEach(pp=>{const p=new Particle(pp.x,pp.y);if(pp.targetKind)p.targetKind=pp.targetKind;state.particles.push(p);});
+      state.selected=null;state.iter=0;document.getElementById('statParticles').textContent=state.particles.length;document.getElementById('statIter').textContent='0';setStatus('Map loaded.');redraw();}
+    catch(err){setStatus('Load failed.');}};r.readAsText(f);};input.click();}
+function clearMap(){state.walls=[];state.exits=[];state.safes=[];state.particles=[];state.selected=null;state.iter=0;
+  document.getElementById('statParticles').textContent='0';document.getElementById('statIter').textContent='0';document.getElementById('statEvac').textContent='0';setStatus('Map cleared.');redraw();}
+function demoLayout(){clearMap();
+  state.walls.push({x1:300,y1:200,x2:300,y2:620},{x1:450,y1:150,x2:700,y2:150},{x1:700,y1:150,x2:700,y2:670},{x1:300,y2:620,x2:900,y2:620});
+  state.exits.push({x:20,y:330,w:25,h:160},{x:1255,y:330,w:25,h:160});
+  state.safes.push({x:480,y:720,w:120,h:60},{x:1100,y:140,w:60,h:100});
+  for(let i=0;i<16;i++){const p=new Particle(rand(100,1100),rand(100,620));state.particles.push(p);}
+  document.getElementById('statParticles').textContent=state.particles.length;setStatus('Demo layout loaded — switch to Simulate and Run.');redraw();}
+
+function redraw(){
+  const c=document.getElementById('canvas'),cx=c.getContext('2d');cx.clearRect(0,0,CANVAS_W,CANVAS_H);
+  cx.strokeStyle='#eef2f7';cx.lineWidth=1;cx.beginPath();
+  for(let x=40;x<CANVAS_W;x+=40){cx.moveTo(x,0);cx.lineTo(x,CANVAS_H);}
+  for(let y=40;y<CANVAS_H;y+=40){cx.moveTo(0,y);cx.lineTo(CANVAS_W,y);}cx.stroke();
+  cx.fillStyle='#b4bcc5';cx.strokeStyle='#64748b';cx.lineWidth=2.5;
+  for(const w of state.walls){if(w.w&&w.h){cx.fillRect(w.x,w.y,w.w,w.h);cx.strokeRect(w.x,w.y,w.w,w.h);}else{cx.beginPath();cx.moveTo(w.x1,w.y1);cx.lineTo(w.x2,w.y2);cx.stroke();}}
+  if(state.showBoids&&boidsVis.length){for(const v of boidsVis){cx.strokeStyle='rgba(59,130,246,0.3)';cx.lineWidth=1;cx.beginPath();for(const q of v.links){cx.moveTo(v.pos.x,v.pos.y);cx.lineTo(q.x,q.y);}cx.stroke();
+    if(v.steer&&(v.steer.x||v.steer.y)){cx.strokeStyle='rgba(217,70,239,0.85)';cx.lineWidth=2;cx.beginPath();cx.moveTo(v.pos.x,v.pos.y);cx.lineTo(v.pos.x+v.steer.x*3,v.pos.y+v.steer.y*3);cx.stroke();cx.lineWidth=1;}}}
+  cx.fillStyle='#34d399';cx.strokeStyle='#059669';
+  for(const e of state.exits){cx.fillRect(e.x,e.y,e.w,e.h);cx.strokeRect(e.x,e.y,e.w,e.h);cx.fillStyle='#059669';cx.fillText('EXIT',e.x+5,e.y+18);cx.fillStyle='#34d399';}
+  cx.fillStyle='#60a5fa';cx.strokeStyle='#1d4ed8';
+  for(const s of state.safes){cx.fillRect(s.x,s.y,s.w,s.h);cx.strokeRect(s.x,s.y,s.w,s.h);cx.fillStyle='#1d4ed8';cx.fillText('SAFE',s.x+5,s.y+18);cx.fillStyle='#60a5fa';}
+  if(state.showGbest){const gb=groupBests();cx.fillStyle='#fde047';
+    for(const k in gb){const p=gb[k];cx.beginPath();cx.arc(p.x,p.y,5,0,Math.PI*2);cx.fill();cx.strokeStyle='#b45309';cx.stroke();cx.fillStyle='#fde047';cx.fillText('g*',p.x-6,p.y-9);}}
+  for(const p of state.particles){
+    cx.fillStyle=p.evacuated?'#86efac':'#22c55e';cx.beginPath();cx.arc(p.pos.x,p.pos.y,p.radius,0,Math.PI*2);cx.fill();
+    cx.strokeStyle='#14532d';cx.lineWidth=1.5;cx.stroke();
+    if(state.selected===p){cx.strokeStyle='#fde047';cx.lineWidth=3;cx.beginPath();cx.arc(p.pos.x,p.pos.y,p.radius+6,0,Math.PI*2);cx.stroke();cx.strokeStyle='#14532d';cx.lineWidth=1.5;}
+    if(state.showVel&&!p.evacuated){cx.strokeStyle='#ef4444';cx.lineWidth=2;cx.beginPath();cx.moveTo(p.pos.x,p.pos.y);cx.lineTo(p.pos.x+p.vel.x*3,p.pos.y+p.vel.y*3);cx.stroke();}
+    if(state.showPbest&&!p.evacuated){cx.fillStyle='#059669';cx.fillRect(p.pbest.x-2,p.pbest.y-2,4,4);}
+  }
+  const o=state.selected;if(state.mode==='edit'&&o&&!(o instanceof Particle)){
+    if(o.x1!==undefined){ // segment wall selection
+      cx.strokeStyle='#3b82f6';cx.lineWidth=3;cx.beginPath();cx.moveTo(o.x1,o.y1);cx.lineTo(o.x2,o.y2);cx.stroke();
+      cx.fillStyle='#fde047';cx.strokeStyle='#b45309';cx.lineWidth=2;
+      for(const p of [[o.x1,o.y1],[o.x2,o.y2]]){cx.beginPath();cx.arc(p[0],p[1],7,0,Math.PI*2);cx.fill();cx.stroke();}
+      cx.lineWidth=1.5;
+    }else{
+    cx.strokeStyle='#3b82f6';cx.lineWidth=2;cx.strokeRect(o.x,o.y,o.w,o.h);
+    const pts={nw:[o.x,o.y],ne:[o.x+o.w,o.y],sw:[o.x,o.y+o.h],se:[o.x+o.w,o.y+o.h],n:[o.x+o.w/2,o.y],s:[o.x+o.w/2,o.y+o.h],w:[o.x,o.y+o.h/2],e:[o.x+o.w,o.y+o.h/2]};
+    cx.fillStyle='#fde047';cx.strokeStyle='#b45309';
+    for(const k in pts){const q=pts[k];cx.fillRect(q[0]-HANDLE/2,q[1]-HANDLE/2,HANDLE,HANDLE);cx.strokeRect(q[0]-HANDLE/2,q[1]-HANDLE/2,HANDLE,HANDLE);}
+    }
+  }
+  if(!state.walls.length&&!state.exits.length&&!state.safes.length&&!state.particles.length){cx.fillStyle='#94a3b8';cx.textAlign='center';cx.font='14px sans-serif';cx.fillText('Edit mode: draw walls/exits/safe zones, place particles, then Simulate',CANVAS_W/2,CANVAS_H/2);cx.textAlign='start';}
+  cx.fillStyle='#334155';cx.font='12px sans-serif';cx.textAlign='left';cx.fillText(`Iter ${state.iter}  Evac ${state.particles.filter(p=>p.evacuated).length}/${state.particles.length}  Boids ${state.boids.on?'on':'off'}  WallAvoid ${state.wallAvoid?'on':'off'}`,10,22);
+}
+
+const canvas=document.getElementById('canvas');
+function canvasPt(e){const r=canvas.getBoundingClientRect();return{x:e.clientX-r.left,y:e.clientY-r.top};}
+canvas.addEventListener('mousedown',e=>{if(state.mode!=='edit')return;const pt=canvasPt(e);
+  if(e.button===2){const o=objectAt(pt.x,pt.y);if(o){[state.walls,state.exits,state.safes,state.particles].forEach(a=>{const i=a.indexOf(o);if(i>=0)a.splice(i,1);});if(state.selected===o)state.selected=null;updateSelectionPanel();redraw();}return;}
+  const o=objectAt(pt.x,pt.y);
+  if(state.tool==='select'){const h=handleAt(o,pt.x,pt.y);state.selected=o;state.drag=o?{obj:o,start:{x:pt.x,y:pt.y},handle:(o.w!==undefined?(h||(rectContains(o,pt)?'move':null)):(h||'move'))}:null;updateSelectionPanel();setStatus(o?`Selected ${o.constructor.name.toLowerCase()}`:'Nothing selected');redraw();return;}
+  if(state.tool==='wall'){state.drag={kind:'wall',start:{x:pt.x,y:pt.y},cur:{x:pt.x,y:pt.y}};setStatus('Drag to draw a wall segment — hold Shift to snap to horizontal/vertical.');return;}
+  if(state.tool==='exit'||state.tool==='safe'){state.drag={kind:state.tool,start:{x:pt.x,y:pt.y}};setStatus(`Drawing ${state.tool}...`);return;}
+  if(state.tool==='particle'){const p=new Particle(pt.x,pt.y);state.particles.push(p);state.selected=p;updateSelectionPanel();document.getElementById('statParticles').textContent=state.particles.length;setStatus('Particle placed.');redraw();return;}
+  if(state.tool==='delete'){const o2=objectAt(pt.x,pt.y);if(o2){[state.walls,state.exits,state.safes,state.particles].forEach(a=>{const i=a.indexOf(o2);if(i>=0)a.splice(i,1);});if(state.selected===o2)state.selected=null;updateSelectionPanel();document.getElementById('statParticles').textContent=state.particles.length;setStatus('Deleted.');redraw();}return;}
+  if(state.tool==='target'){if(o instanceof Particle){state.drag={kind:'target',obj:o,start:{x:pt.x,y:pt.y}};setStatus('Target tool: click an exit or safe zone.');}else if(state.drag&&state.drag.obj&&o&&(state.exits.includes(o)||state.safes.includes(o))){state.drag.obj.targetObj=o;state.drag.obj.targetKind=state.exits.includes(o)?'exit':'safe';setStatus(`Target set to ${state.exits.includes(o)?'exit':'safe zone'}.`);state.drag=null;redraw();}return;}
+});
+canvas.addEventListener('mousemove',e=>{if(state.mode!=='edit'||!state.drag)return;const pt=canvasPt(e),d=state.drag;
+  if(d.kind==='wall'){let ex=pt.x,ey=pt.y;
+    if(e.shiftKey){const dx=Math.abs(pt.x-d.start.x),dy=Math.abs(pt.y-d.start.y);if(dx>dy)ey=d.start.y;else ex=d.start.x;}
+    d.cur={x:ex,y:ey};cxPreviewLine(d.start,d.cur);return;}
+  if(d.kind==='exit'||d.kind==='safe'){const w=Math.abs(pt.x-d.start.x),h=Math.abs(pt.y-d.start.y);const rx=Math.min(d.start.x,pt.x),ry=Math.min(d.start.y,pt.y);
+    cxPreview(rx,ry,Math.max(MIN_RECT,w),Math.max(MIN_RECT,h),d.kind);return;}
+  const obj=d.obj;if(!obj)return;const dx=pt.x-d.start.x,dy=pt.y-d.start.y;
+  if(obj instanceof Particle){obj.pos.x+=dx;obj.pos.y+=dy;obj.pbest={x:obj.pos.x,y:obj.pos.y};d.start={x:pt.x,y:pt.y};updateSelectionPanel();redraw();return;}
+  if(obj.x1!==undefined){ // segment wall
+    if(d.handle==='p1'){obj.x1+=dx;obj.y1+=dy;}else if(d.handle==='p2'){obj.x2+=dx;obj.y2+=dy;}
+    else {obj.x1+=dx;obj.y1+=dy;obj.x2+=dx;obj.y2+=dy;}
+    d.start={x:pt.x,y:pt.y};updateSelectionPanel();redraw();return;}
+  if(d.handle==='move'){obj.x+=dx;obj.y+=dy;d.start={x:pt.x,y:pt.y};}
+  else if(obj.w!==undefined){const r=obj;
+    if(d.handle==='n'){const nh=Math.max(MIN_RECT,r.h-dy);r.y=r.y+r.h-nh;r.h=nh;}else if(d.handle==='s')r.h=Math.max(MIN_RECT,r.h+dy);
+    else if(d.handle==='w'){const nw=Math.max(MIN_RECT,r.w-dx);r.x=r.x+r.w-nw;r.w=nw;}else if(d.handle==='e')r.w=Math.max(MIN_RECT,r.w+dx);
+    else if(d.handle==='nw'){const nh=Math.max(MIN_RECT,r.h-dy), nw=Math.max(MIN_RECT,r.w-dx);r.y=r.y+r.h-nh;r.h=nh;r.x=r.x+r.w-nw;r.w=nw;}
+    else if(d.handle==='ne'){const nh=Math.max(MIN_RECT,r.h-dy), nw=Math.max(MIN_RECT,r.w+dx);r.y=r.y+r.h-nh;r.h=nh;r.w=nw;}
+    else if(d.handle==='sw'){const nh=Math.max(MIN_RECT,r.h+dy), nw=Math.max(MIN_RECT,r.w-dx);r.x=r.x+r.w-nw;r.w=nw;r.h=nh;}
+    else if(d.handle==='se'){r.w=Math.max(MIN_RECT,r.w+dx);r.h=Math.max(MIN_RECT,r.h+dy);}
+    d.start={x:pt.x,y:pt.y};}
+  updateSelectionPanel();redraw();});
+function cxPreview(x,y,w,h,kind){const c=document.getElementById('canvas'),ctx=c.getContext('2d');ctx.clearRect(0,0,CANVAS_W,CANVAS_H);redraw();ctx.fillStyle=kind==='exit'?'rgba(52,211,153,0.35)':'rgba(96,165,250,0.35)';ctx.strokeStyle='#000';ctx.lineWidth=2;ctx.fillRect(x,y,w,h);ctx.strokeRect(x,y,w,h);}
+function cxPreviewLine(a,b){const c=document.getElementById('canvas'),ctx=c.getContext('2d');redraw();ctx.strokeStyle='#334155';ctx.lineWidth=5;ctx.lineCap='round';ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.stroke();ctx.strokeStyle='#f8fafc';ctx.lineWidth=1.5;ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.stroke();ctx.fillStyle='#334155';ctx.beginPath();ctx.arc(a.x,a.y,4,0,Math.PI*2);ctx.fill();ctx.fillText(`${Math.round(Math.hypot(b.x-a.x,b.y-a.y))}px`,(a.x+b.x)/2+8,(a.y+b.y)/2-8);}
+canvas.addEventListener('mouseup',e=>{if(state.mode!=='edit'||!state.drag)return;const pt=canvasPt(e),d=state.drag;
+  if(d.kind==='wall'){let ex=pt.x,ey=pt.y;
+    if(e.shiftKey){const dx=Math.abs(pt.x-d.start.x),dy=Math.abs(pt.y-d.start.y);if(dx>dy)ey=d.start.y;else ex=d.start.x;}
+    if(Math.hypot(ex-d.start.x,ey-d.start.y)>=8){state.walls.push({x1:d.start.x,y1:d.start.y,x2:ex,y2:ey});setStatus('Wall segment drawn.');}
+    else setStatus('Wall too short — drag further.');}
+  else if(d.kind==='exit'||state.drag.kind==='safe'){const w=Math.abs(pt.x-d.start.x),h=Math.abs(pt.y-d.start.y);
+    if(w>=MIN_RECT&&h>=MIN_RECT){const r={x:Math.min(d.start.x,pt.x),y:Math.min(d.start.y,pt.y),w,h,center:function(){return{x:this.x+this.w/2,y:this.y+this.h/2};}};
+      if(d.kind==='exit')state.exits.push(r);else state.safes.push(r);setStatus(`${d.kind.charAt(0).toUpperCase()+d.kind.slice(1)} drawn.`);}}
+  state.drag=null;redraw();});
+
+window.addEventListener('keydown',e=>{const tag=(e.target&&e.target.tagName)||'';const typing=tag==='INPUT'||tag==='SELECT'||tag==='TEXTAREA';
+  if(!typing&&(e.key==='Delete'||e.key==='Backspace')){deleteSelected();}
+  if(e.key===' '&&state.mode==='sim'&&!typing){e.preventDefault();toggleRun();}
+  if(typing)return;
+  const toolKeys={'1':'select','2':'wall','3':'exit','4':'safe','5':'particle','6':'target','7':'delete'};
+  if(toolKeys[e.key]){setTool(toolKeys[e.key]);return;}
+  if(e.key==='v'||e.key==='V'){state.showVel=!state.showVel;redraw();}
+  if(e.key==='p'||e.key==='P'){state.showPbest=!state.showPbest;redraw();}
+  if(e.key==='g'||e.key==='G'){state.showGbest=!state.showGbest;redraw();}
+  if(e.key==='b'||e.key==='B'){state.showBoids=!state.showBoids;redraw();}});
+function toggleRun(){if(state.mode!=='sim'){setMode('sim');return;}if(!state.particles.length){setStatus('No particles.');return;}if(!state.exits.length&&!state.safes.length){setStatus('No exits or safe zones.');return;}
+  state.running=!state.running;document.getElementById('btnRun').textContent=state.running?'⏸ Pause':'▶ Run';setStatus(state.running?'Running…':'Paused.');if(state.running)runFrame();}
+function stepSim(){if(state.mode!=='sim')setMode('sim');if(!state.particles.length){setStatus('No particles.');return;}if(!state.exits.length&&!state.safes.length){setStatus('No exits or safe zones.');return;}
+  psoStep(state.pso.iters);document.getElementById('statIter').textContent=state.iter;document.getElementById('statEvac').textContent=state.particles.filter(p=>p.evacuated).length;setStatus(`Stepped ${state.pso.iters} iter(s).`);redraw();const ev=state.particles.filter(p=>p.evacuated).length;if(ev===state.particles.length)setStatus('All particles evacuated!');}
+function resetSim(){state.running=false;document.getElementById('btnRun').textContent='▶ Run';state.iter=0;
+  for(const p of state.particles){p.evacuated=false;p.pbest={x:p.pos.x,y:p.pos.y};p.pbestCost=Infinity;if(p.targetKind==='nearest')p.targetObj=null;}
+  document.getElementById('statIter').textContent='0';document.getElementById('statEvac').textContent='0';setStatus('Sim reset.');redraw();}
+function runFrame(){if(!state.running)return;if(!state.particles.length){state.running=false;document.getElementById('btnRun').textContent='▶ Run';return;}
+  psoStep(state.pso.iters);document.getElementById('statIter').textContent=state.iter;document.getElementById('statEvac').textContent=state.particles.filter(p=>p.evacuated).length;redraw();
+  if(state.particles.filter(p=>p.evacuated).length===state.particles.length){state.running=false;document.getElementById('btnRun').textContent='▶ Run';setStatus('All particles evacuated!');return;}
+  state.animId=requestAnimationFrame(runFrame);}
+
+window.app={setMode,setTool,addParticles,applyPso,applyBoids,toggleRun,stepSim,resetSim,saveMap,loadMap,clearMap,demoLayout,deleteSelected,changeSelType,applySelTarget,applySelTransform,applySelSize,redraw};
+document.addEventListener('DOMContentLoaded',()=>{app.setMode('edit');app.setTool('select');app.redraw();document.getElementById('status').textContent='Ready — use tools 1–7: drag to draw walls, exits, safe zones; place particles; then Simulate.';document.getElementById('statusText').textContent=document.getElementById('status').textContent;});
+</script>
+</body>
+</html>
+
